@@ -81,7 +81,7 @@
             :key="t.name"
             @click="select(t)"
             :class="{
-              'border-4': sel === t,
+              'border-4': sel === t
             }"
             class="
               bg-white
@@ -146,7 +146,7 @@
             v-for="(bar, idx) in normalizeGraph()"
             :key="idx"
             :style="{
-              height: `${bar}%`,
+              height: `${bar}%`
             }"
             class="bg-purple-800 border w-10"
           ></div>
@@ -192,31 +192,49 @@ export default {
       ticker: "",
       tickers: [],
       sel: null,
-      graph: [],
+      graph: []
     };
   },
 
-  methods: {
-    add() {
-      const currentTicker = {
-        name: this.ticker,
-        price: "-",
-      };
+  created() {
+    const tickersData = localStorage.getItem("cryptonomicon-list");
 
-      this.tickers.push(currentTicker);
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData);
+      this.tickers.forEach(ticker => {
+        this.subscribeToUpdates(ticker.name); 
+      });
+    }
+  },
+
+  methods: {
+    subscribeToUpdates(tickerName) {
       setInterval(async () => {
         const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=631a40cf7e91d44acdabc17b2af61f258254aa3c8b32d3c9d1702f8aecc02164`
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=631a40cf7e91d44acdabc17b2af61f258254aa3c8b32d3c9d1702f8aecc02164`
         );
         const data = await f.json();
-        this.tickers.find((t) => t.name === currentTicker.name).price =
+        this.tickers.find((t) => t.name === tickerName).price =
           data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
-        if (this.sel?.name === currentTicker.name) {
+        if (this.sel?.name === tickerName) {
           this.graph.push(data.USD);
         }
       }, 5000);
       this.ticker = "";
+    },
+
+    add() {
+      const currentTicker = {
+        name: this.ticker,
+        price: "-"
+      };
+
+      this.tickers.push(currentTicker);
+
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
+
+      this.subscribeToUpdates(currentTicker.name);
     },
 
     select(ticker) {
@@ -234,7 +252,7 @@ export default {
       return this.graph.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
-    },
-  },
+    }
+  }
 };
 </script>
