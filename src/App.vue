@@ -129,15 +129,12 @@
               focus:ring-offset-2
               focus:ring-gray-500
             "
-            v-if="hasNextPage"
             @click="page = page + 1"
+            v-if="hasNextPage"
           >
             Вперед
           </button>
-          <div>
-            Фильтр:
-            <input v-model="filter" />
-          </div>
+          <div>Фильтр: <input v-model="filter" /></div>
         </div>
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -162,7 +159,7 @@
                 {{ t.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formatPrice(t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -210,9 +207,7 @@
           <div
             v-for="(bar, idx) in normalizedGraph"
             :key="idx"
-            :style="{
-              height: `${bar}%`
-            }"
+            :style="{ height: `${bar}%` }"
             class="bg-purple-800 border w-10"
           ></div>
         </div>
@@ -249,6 +244,8 @@
 </template>
 
 <script>
+import { subscribeToTicker, unsubscribeFromTicker } from "./api";
+
 export default {
   name: "App",
 
@@ -292,9 +289,13 @@ export default {
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach((ticker) => {
-        this.subscribeToUpdates(ticker.name);
+        subscribeToTicker(ticker.name, (newPrice) =>
+          this.updateTicker(ticker.name, newPrice)
+        );
       });
     }
+
+    setInterval(this.updateTickers, 5000);
   },
 
   computed: {
@@ -325,6 +326,7 @@ export default {
       if (maxValue === minValue) {
         return this.graph.map(() => 50);
       }
+
       return this.graph.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
@@ -339,20 +341,20 @@ export default {
   },
 
   methods: {
-    subscribeToUpdates(tickerName) {
-      setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=631a40cf7e91d44acdabc17b2af61f258254aa3c8b32d3c9d1702f8aecc02164`
-        );
-        const data = await f.json();
-        this.tickers.find((t) => t.name === tickerName).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+          t.price = price;
+        });
+    },
 
-        if (this.selectedTicker?.name === tickerName) {
-          this.graph.push(data.USD);
-        }
-      }, 5000);
-      this.ticker = "";
+    formatPrice(price) {
+      if (price === "-") {
+        return price;
+      }
+
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
     add() {
@@ -362,30 +364,34 @@ export default {
       };
 
       this.tickers = [...this.tickers, currentTicker];
+      this.ticker = "";
       this.filter = "";
-
-      this.subscribeToUpdates(currentTicker.name);
+      subscribeToTicker(currentTicker.name, (newPrice) =>
+        this.updateTicker(currentTicker.name, newPrice)
+      );
     },
 
     select(ticker) {
+      console.log(ticker);
       this.selectedTicker = ticker;
     },
 
     handleDelete(tickerToRemove) {
-      this.tickers = this.tickers.filter((t) => t != tickerToRemove);
+      this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
+      unsubscribeFromTicker(tickerToRemove.name);
     }
   },
 
   watch: {
-    tickers() {
-      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
-    },
-
     selectedTicker() {
       this.graph = [];
+    },
+
+    tickers() {
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
     },
 
     paginatedTickers() {
